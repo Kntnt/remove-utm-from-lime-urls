@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+
+# Script to remove specific UTM parameters from a file and zip it.
+# Requires exactly one parameter: the path to a readable and writable file.
+# Uses Perl for inline editing with UTF-8 support.
+# Compresses the modified file into a zip file with the same base name (without extension).
+
+# Check the number of arguments
+if [ "$#" -ne 1 ]; then
+  echo "Error: Incorrect number of arguments provided." >&2
+  echo "This script requires exactly one argument: the path to the file to process." >&2
+  echo "Usage: $0 <path/to/your/file>" >&2
+  exit 1
+fi
+
+filepath="$1"
+
+# Check if the file exists
+if [ ! -e "$filepath" ]; then
+  echo "Error: File '$filepath' not found." >&2
+  exit 1
+fi
+
+# Check if it's a regular file
+if [ ! -f "$filepath" ]; then
+  echo "Error: '$filepath' is not a regular file." >&2
+  exit 1
+fi
+
+# Check read permission
+if [ ! -r "$filepath" ]; then
+  echo "Error: Read permission denied for file '$filepath'." >&2
+  exit 1
+fi
+
+# Check write permission
+if [ ! -w "$filepath" ]; then
+  echo "Error: Write permission denied for file '$filepath'." >&2
+  exit 1
+fi
+
+# Check if perl is available
+if ! command -v perl &> /dev/null; then
+    echo "Error: Command 'perl' not found. Please install Perl to run this script." >&2
+    exit 1
+fi
+
+# Check if zip is available
+if ! command -v zip &> /dev/null; then
+    echo "Error: Command 'zip' not found. Please install zip to run this script." >&2
+    exit 1
+fi
+
+
+echo "Processing file: $filepath"
+
+# Use Perl to remove the pattern inline with UTF-8 support
+# Pattern: /(?<=\$\$)\?utm[^"]+/g
+# (?<=\$\$) - Positive lookbehind: matches if preceded by exactly "$$" (without including them in the match)
+# \?        - Matches a literal question mark
+# utm       - Matches the string "utm"
+# [^"]+     - Matches one or more characters that are *not* a double quote (")
+# g         - Global flag: replace all occurrences on each line
+# -CSD      - Ensures Perl handles STDIN/STDOUT/STDERR and data (-i) as UTF-8
+# -p        - Reads the file line by line, executes the code, prints the line
+# -i        - Edits the file in-place (inline)
+perl -CSD -pi -e 's/(?<=\$\$)\?utm[^"]+//g' "$filepath"
+
+if [ $? -ne 0 ]; then
+    echo "Error: Perl command failed while processing '$filepath'." >&2
+    exit 1
+fi
+
+echo "Pattern removed from file."
+
+# Get the filename without the path
+filename=$(basename "$filepath")
+
+# Get the filename without the extension (removes the last dot and everything after)
+zipname="${filename%.*}"
+
+# Create the zip file name
+zipfilename="${zipname}.zip"
+
+echo "Compressing '$filepath' to '$zipfilename'..."
+
+# Compress the modified file
+# -j : "junk paths", stores only the filename, not the full path inside the zip archive.
+zip -j "$zipfilename" "$filepath"
+
+if [ $? -ne 0 ]; then
+    echo "Error: zip command failed." >&2
+    exit 1
+fi
+
+echo "Done! File '$filepath' has been processed and compressed to '$zipfilename'."
+
+exit 0
